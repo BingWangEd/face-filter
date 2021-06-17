@@ -8,7 +8,7 @@ import { drawMesh } from './utilities';
 // http://localhost:3002/
 // https://www.youtube.com/watch?v=7lXYGDVHUNw&ab_channel=NicholasRenotte
 
-function App() {
+function CameraCanvas() {
   const webcamRef = useRef();
   const canvasRef = useRef();
 
@@ -81,4 +81,4 @@ function App() {
   );
 }
 
-export default App;
+export default CameraCanvas;
