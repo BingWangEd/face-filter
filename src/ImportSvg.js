@@ -1,6 +1,7 @@
 import Mouth from './mouth.svg';
 import Paper from 'paper';
 import { useCallback, useEffect } from 'react';
+import { findFirstItemWithPrefix, findMouth, bindSkeletonToIllustration } from './utilities';
 
 const ImportSvg = () => {
   const importSvg = useCallback((file) => {
@@ -24,11 +25,14 @@ const ImportSvg = () => {
 
   useEffect(async () => {
     const svgScope = await importSvg(Mouth);
-    const skeleton = svgScope.project._children[0].children.mouth._children[1];
-    const mouth = svgScope.project._children[0].children.mouth._children[2];
-    console.log('skeleton: ', skeleton);
-    console.log('mouth: ', mouth);
-  }, [importSvg])
+    const skeleton = findFirstItemWithPrefix(svgScope.project, 'skeleton');
+    const mouth = findFirstItemWithPrefix(svgScope.project, 'illustration');
+    const mouthSkeletonPoints = findMouth(skeleton);
+
+    // console.log('mouth: ', mouth);
+    console.log('mouthSkeletonPoints: ', mouthSkeletonPoints);
+    bindSkeletonToIllustration(skeleton, mouth);
+  }, [importSvg]);
 
   return (
     <div>Import Svg</div>

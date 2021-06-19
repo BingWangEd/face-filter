@@ -2664,3 +2664,58 @@ export const drawMesh = (predictions, ctx) => {
     });
   }
 }
+
+export const findFirstItemWithPrefix = (root, prefix) => {
+  let items = root.getItems({ recursive: true });
+  for (let i = 0; i < items.length; i++) {
+      if (items[i].name && items[i].name.startsWith(prefix)) {
+      return items[i];
+      }
+  }
+  return null;
+}
+
+const MOUTH_POINTS = [
+  'leftMouthCorner', 'leftUpperLipTop0', 'leftUpperLipTop1', 'upperLipTopMid', 'rightMouthCorner',
+  'rightUpperLipTop0', 'rightUpperLipTop1', 'rightMiddleLip', 'rightUpperLipBottom1', 'leftMiddleLip',
+  'leftUpperLipBottom1', 'upperLipBottomMid', 'rightLowerLipTop0', 'leftLowerLipTop0', 'lowerLipTopMid',
+  'rightLowerLipBottom0', 'rightLowerLipBottom1', 'leftLowerLipBottom0', 'leftLowerLipBottom1', 'lowerLipBottomMid',
+]
+
+export const findMouth = (root) => {
+  let mouthPaths = {} // { leftUpperLipBottom1: Point {_x: 635.6, _y: 261.6, _owner: Rectangle, _setter: "setCenter"}}
+  MOUTH_POINTS.forEach((point) => {
+    const path = findFirstItemWithPrefix(root, point);
+    mouthPaths[point] = path.bounds.center;
+  })
+  return mouthPaths;
+}
+
+const isPath = (item) => {
+  return item.constructor === item.project._scope.Path;
+}
+
+const isShape = (item) => {
+  return item.constructor === item.project._scope.Shape;
+}
+
+const isGroup = (item) => {
+  return item.constructor === item.project._scope.Group;
+}
+
+export const bindSkeletonToIllustration = (skeleton, illustrationPaths) => {
+  // items => illustrationPaths
+  // const items = illustrationPaths.filter(item => item.parent && item.parent.name && item.parent.name.startsWith('illustration'));
+  // console.log('items: ', items);
+  let items = illustrationPaths;
+  if (isGroup(illustrationPaths)) {
+    items = illustrationPaths.getItems({recursive: true});
+  }
+  const skinnedPaths = [];
+
+  items.forEach((path) => {
+    const segs = path.segments;
+
+    console.log('segs: ', segs);
+  })
+}
