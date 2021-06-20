@@ -1,7 +1,7 @@
 import Mouth from './mouth.svg';
 import Paper from 'paper';
 import { useCallback, useEffect } from 'react';
-import { findFirstItemWithPrefix, findMouth, bindSkeletonToIllustration } from './utilities';
+import { findFirstItemWithPrefix, bindSkeletonToIllustration } from './utilities';
 
 const ImportSvg = () => {
   const importSvg = useCallback((file) => {
@@ -12,7 +12,7 @@ const ImportSvg = () => {
       svgScope.project.importSVG(
         file,
         () => {
-          console.log('** SVG imported **');
+          // console.log('** SVG imported **');
           resolve(svgScope);
         },
         (e) => {
@@ -27,11 +27,8 @@ const ImportSvg = () => {
     const svgScope = await importSvg(Mouth);
     const skeleton = findFirstItemWithPrefix(svgScope.project, 'skeleton');
     const mouth = findFirstItemWithPrefix(svgScope.project, 'illustration');
-    const mouthSkeletonPoints = findMouth(skeleton);
-
-    // console.log('mouth: ', mouth);
-    console.log('mouthSkeletonPoints: ', mouthSkeletonPoints);
-    bindSkeletonToIllustration(skeleton, mouth);
+    
+    bindSkeletonToIllustration(skeleton, mouth, svgScope);
   }, [importSvg]);
 
   return (

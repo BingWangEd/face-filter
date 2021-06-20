@@ -1,3 +1,5 @@
+import Paper from 'paper';
+
 // Triangulation metrics
 export const TRIANGULATION = [
     127,
@@ -2682,13 +2684,48 @@ const MOUTH_POINTS = [
   'rightLowerLipBottom0', 'rightLowerLipBottom1', 'leftLowerLipBottom0', 'leftLowerLipBottom1', 'lowerLipBottomMid',
 ]
 
+const MOUTH_BONES = {
+  bLeftMouthCornerLeftUpperLipTop0: ['leftMouthCorner', 'leftUpperLipTop0'],
+  bLeftUpperLipTop0LeftUpperLipTop1: ['leftUpperLipTop0', 'leftUpperLipTop1'],
+  bLeftUpperLipTop1UpperLipTopMid: ['leftUpperLipTop1', 'upperLipTopMid'],
+  bRigthMouthCornerRigthUpperLipTop0: ['rightMouthCorner', 'rightUpperLipTop0'],
+  bRigthUpperLipTop0RigthUpperLipTop1: ['rightUpperLipTop0', 'rightUpperLipTop1'],
+  bRigthUpperLipTop1UpperLipTopMid: ['rightUpperLipTop1', 'upperLipTopMid'],
+  bLeftMouthCornerLeftMiddleLip: ['leftMouthCorner', 'leftMiddleLip'],
+  bLeftMiddleLipLeftUpperLipBottom1: ['leftMiddleLip', 'leftUpperLipBottom1'],
+  bLeftUpperLipBottom1UpperLipBottomMid: ['leftUpperLipBottom1', 'upperLipBottomMid'],
+  bRightMouthCornerRightMiddleLip: ['rightMouthCorner', 'rightMiddleLip'],
+  bRightMiddleLipRightUpperLipBottom1: ['rightMiddleLip', 'rightUpperLipBottom1'],
+  bRightUpperLipBottom1UpperLipBototmMid: ['rightUpperLipBottom1', 'upperLipBottomMid'],
+  bLeftMiddleLipLeftLowerLipTop0: ['leftMiddleLip', 'leftLowerLipTop0'],
+  bLeftLowerLipTop0LowerLipTopMid: ['leftLowerLipTop0', 'lowerLipTopMid'],
+  bRightMiddleLipRightLowerLipTop0: ['rightMiddleLip', 'rightLowerLipTop0'],
+  bRightLowerLipTop0LowerLipTopMid: ['rightLowerLipTop0', 'lowerLipTopMid'],
+  bLeftMouthCornerLeftLowerLipBottom0: ['leftMouthCorner', 'leftLowerLipBottom0'],
+  bLeftLowerLipBottom0LeftLowerLipBottom1: ['leftLowerLipBottom0', 'leftLowerLipBottom1'],
+  bLeftLowerLipBottom1LowerLipBottomMid: ['leftLowerLipBottom1', 'lowerLipBottomMid'],
+  bRightMouthCornerRightLowerLipBottom0: ['rightMouthCorner', 'rightLowerLipBottom0'],
+  bRightLowerLipBottom0RightLowerLipBottom1: ['rightLowerLipBottom0', 'rightLowerLipBottom1'],
+  bRightLowerLipBottom1LowerLipBottomMid: ['rightLowerLipBottom1', 'lowerLipBottomMid'],
+}
+
 export const findMouth = (root) => {
-  let mouthPaths = {} // { leftUpperLipBottom1: Point {_x: 635.6, _y: 261.6, _owner: Rectangle, _setter: "setCenter"}}
+  let mouthPoints = {} // { leftUpperLipBottom1: Point {_x: 635.6, _y: 261.6, _owner: Rectangle, _setter: "setCenter"}}
   MOUTH_POINTS.forEach((point) => {
     const path = findFirstItemWithPrefix(root, point);
-    mouthPaths[point] = path.bounds.center;
+    mouthPoints[point] = path.bounds.center;
   })
-  return mouthPaths;
+  return mouthPoints;
+}
+
+export const constructMouthBones = (mouthPoints) => {
+  let mouthBones = {}; // { bLeftMouthCornerLeftLowerLipBottom0: [point0, point1]}
+  Object.keys(MOUTH_BONES).forEach((bone) => {
+    const [k0, k1] = MOUTH_BONES[bone];
+    if (!k0 || !k1) return;
+    mouthBones[bone] = [mouthPoints[k0], mouthPoints[k1]];
+  });
+  return mouthBones;
 }
 
 const isPath = (item) => {
@@ -2703,19 +2740,154 @@ const isGroup = (item) => {
   return item.constructor === item.project._scope.Group;
 }
 
-export const bindSkeletonToIllustration = (skeleton, illustrationPaths) => {
-  // items => illustrationPaths
-  // const items = illustrationPaths.filter(item => item.parent && item.parent.name && item.parent.name.startsWith('illustration'));
-  // console.log('items: ', items);
-  let items = illustrationPaths;
+export const bindSkeletonToIllustration = (skeleton, illustrationPaths, scope) => {
+  // console.log('skeleton: ', skeleton);
+  // console.log('illustrationPaths: ', illustrationPaths);
+
+  const mouthSkeletonPoints = findMouth(skeleton);
+  const mouthBones = constructMouthBones(mouthSkeletonPoints);
+  // { bLeftMouthCornerLeftLowerLipBottom0: [point0, point1]}
+  // console.log('mouth: ', mouth);
+  // console.log('mouthSkeletonPoints: ', mouthSkeletonPoints);
+
+  let items = illustrationPaths; // [mouthPath]
   if (isGroup(illustrationPaths)) {
     items = illustrationPaths.getItems({recursive: true});
   }
+
+  // console.log('items: ', items);
   const skinnedPaths = [];
+  items.forEach((path) => { // one path;
+    const segs = path.segments; // four segs
 
-  items.forEach((path) => {
-    const segs = path.segments;
-
-    console.log('segs: ', segs);
+    // console.log('segs: ', segs);
+    segs.forEach((seg) => {
+      const weights = getWeights(seg.point, mouthBones);
+      // weights: { bLeftMouthCornerLeftLowerLipBottom0: {
+      //     value: 0.**, bone: [point0, point1], name: bLeftMouthCornerLeftLowerLipBottom0
+      //   }
+      // }
+      let segment = {
+        point: getSkinning(seg.point, weights, scope)
+      }
+      // segment: {
+      //   skinning: {
+      //     bLeftMouthCornerLeftLowerLipBottom0: {
+      //       bone: [point0, point1],
+      //       weight: 0.**,
+      //       transform: {
+      //          transform: Point, // p + transform = closest point from p to bone
+      //          anchorPerc, // number between 0 to 1
+      //     }
+      //     ...
+      //   },
+      //   position: Point, // current segment point
+      //   currentPosition: Point(0, 0),
+      // }
+    });
   })
+}
+
+const getWeights = (point, bones) => {
+  let totalW = 0;
+  let weights = {};
+  Object.keys(bones).forEach(bone => {
+      const [kp0, kp1] = bones[bone];
+      let d = getClosestPointOnSegment(kp0, kp1, point)
+          .getDistance(point);
+      // Absolute weight = 1 / (distance * distance)
+      let w = 1 / (d * d);
+      weights[bone] = {
+          value: w,
+          bone: bones[bone],
+          name: bone,
+      }
+  });
+
+  let values = Object.values(weights).sort((v0, v1) => {
+      return v1.value - v0.value;
+  });
+
+  weights = {};
+  totalW = 0;
+  values.forEach(v => {
+      weights[v.name] = v;
+      totalW += v.value;
+  });
+
+  if (totalW === 0) {
+      // Point is outside of the influence zone of all bones. It will not be influence by any bone.
+      return {};
+  }
+
+  // Normalize weights to sum up to 1.
+  Object.values(weights).forEach(weight => {
+      weight.value /= totalW;
+  });
+
+  return weights;
+}
+
+const getClosestPointOnSegment = (p0, p1, p) => {
+  let d = p1.subtract(p0);
+  let c = p.subtract(p0).dot(d) / (d.dot(d));
+  if (c >= 1) {
+      return p1.clone();
+  } else if (c <= 0) {
+      return p0.clone();
+  } else {
+    return p0.add(d.multiply(c));
+  }
+}
+
+const getSkinning = (point, weights, scope) => {
+  let skinning = {};
+  Object.keys(weights).forEach(boneName => {
+      const [kp0, kp1] = weights[boneName].bone;
+      skinning[boneName] = {
+          bone: weights[boneName].bone,
+          weight: weights[boneName].value,
+          transform: getPointTransform(point, kp0, kp1),
+      };
+  });
+  return {
+      skinning: skinning,
+      position: point,
+      currentPosition: new scope.Point(0, 0),
+  }
+};
+
+/// Finds a point's bone transform.
+// Let anchor be the closest point on the bone to the point.
+// A point's bone transformation is the transformation from anchor to the point.
+const getPointTransform = (p, kp0, kp1) => {
+  // get the slope of the bone
+  let dir = kp1.subtract(kp0).normalize();
+  
+  let n = dir.clone();
+  n.angle += 90; // get the angle verticle to the bone
+  
+  let closestP = getClosestPointOnSegment(kp0, kp1, p);
+  let v = p.subtract(closestP);
+  let dirProjD = v.dot(dir);
+  let dirProjN = v.dot(n);
+  
+  let d = kp0.subtract(kp1).length;
+  let anchorPerc = closestP.subtract(kp0).length / d;
+
+  // console.log('kp0: ', kp0);
+  // console.log('kp1: ', kp1);
+  // console.log('p: ', p);
+  // console.log('dir: ', dir);
+  // console.log('n: ', n);
+  // console.log('closestP: ', closestP);
+  // console.log('v: ', v);
+  // console.log('dirProjD: ', dirProjD);
+  // console.log('dirProjN: ', dirProjN);
+  // console.log('anchorPerc: ', anchorPerc);
+  return {
+      // p + transform will be the closet spot on the bone
+      transform: new Paper.Point(dirProjD, dirProjN), // paper.default.point
+      anchorPerc, // what is anchorPerc?
+  };
 }
