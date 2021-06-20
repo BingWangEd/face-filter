@@ -2758,10 +2758,11 @@ export const bindSkeletonToIllustration = (skeleton, illustrationPaths, scope) =
   // console.log('items: ', items);
   const skinnedPaths = [];
   items.forEach((path) => { // one path;
-    const segs = path.segments; // four segs
+    const segs = []; // four segs
 
     // console.log('segs: ', segs);
-    segs.forEach((seg) => {
+    path.segments.forEach((seg) => {
+      // TODO: Adds collinear situation
       const weights = getWeights(seg.point, mouthBones);
       // weights: { bLeftMouthCornerLeftLowerLipBottom0: {
       //     value: 0.**, bone: [point0, point1], name: bLeftMouthCornerLeftLowerLipBottom0
@@ -2770,7 +2771,7 @@ export const bindSkeletonToIllustration = (skeleton, illustrationPaths, scope) =
       let segment = {
         point: getSkinning(seg.point, weights, scope)
       }
-      // segment: {
+      // point: {
       //   skinning: {
       //     bLeftMouthCornerLeftLowerLipBottom0: {
       //       bone: [point0, point1],
@@ -2784,8 +2785,31 @@ export const bindSkeletonToIllustration = (skeleton, illustrationPaths, scope) =
       //   position: Point, // current segment point
       //   currentPosition: Point(0, 0),
       // }
+
+      // For handles, compute transformation in world space.
+      if (seg.handleIn) {
+        let pHandleIn = seg.handleIn.add(seg.point);
+        segment.handleIn = getSkinning(pHandleIn, getWeights(pHandleIn, mouthBones), scope);
+      }
+      if (seg.handleOut) {
+        let pHandleOut = seg.handleOut.add(seg.point);
+        segment.handleOut = getSkinning(pHandleOut, getWeights(pHandleOut, mouthBones), scope);
+      }
+      segs.push(segment);
+      return segment;
     });
-  })
+
+    skinnedPaths.push({
+      segments: segs, 
+      fillColor: path.fillColor,
+      strokeColor: path.strokeColor,
+      strokeWidth: path.strokeWidth,
+      closed: path.closed
+    });
+  });
+
+  console.log('skinnedPaths: ', skinnedPaths);
+  return skinnedPaths;
 }
 
 const getWeights = (point, bones) => {
