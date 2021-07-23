@@ -3,15 +3,24 @@ import * as tf from "@tensorflow/tfjs";
 import * as facemesh from "@tensorflow-models/face-landmarks-detection";
 import Webcam from 'react-webcam';
 import { useCallback, useEffect, useRef } from 'react';
-import { drawMesh } from './utilities';
+import { drawMouth } from './utilities';
+import Mouth from './mouth.svg';
+import Paper from 'paper';
+import { findFirstItemWithPrefix, bindSkeletonToIllustration, findMouth, constructMouthBones } from './utilities';
 
 // http://localhost:3002/
 // https://www.youtube.com/watch?v=7lXYGDVHUNw&ab_channel=NicholasRenotte
 
-function CameraCanvas() {
+function FaceFilter() {
   const webcamRef = useRef();
   const canvasRef = useRef();
 
+  const mouthBonesRef = useRef();
+  const skinnedPathsRef = useRef();
+
+  // const [mouthBones, setMouthBones] = useState();
+  // const [skinnedPaths, setSkinnedPaths] = useState();
+  
   // Detect function
   const detect = useCallback(async (net) => {
     if (webcamRef.current && webcamRef.current.video.readyState === 4) {
@@ -33,7 +42,8 @@ function CameraCanvas() {
 
       // Get canvas context for drawing
       const ctx = canvasRef.current.getContext("2d");
-      requestAnimationFrame(() => drawMesh(face, ctx));
+      // Sanity check if face exists
+      requestAnimationFrame(() => drawMouth(face, ctx, skinnedPathsRef.current, mouthBonesRef.current));
     }
   }, []);
 
@@ -42,12 +52,48 @@ function CameraCanvas() {
     const net = await facemesh.load(facemesh.SupportedPackages.mediapipeFacemesh);
     setInterval(() => {
       detect(net);
-    }, 1000);
+    }, 5000);
   }, [detect]);
 
   useEffect(() => {
     runFacemesh();
   }, [runFacemesh]);
+
+  const importSvg = useCallback((file) => {
+    let svgScope = new Paper.PaperScope();
+    let canvas = svgScope.createCanvas(0, 0);
+    svgScope.setup(canvas);
+    return new Promise((resolve, reject) => {
+      svgScope.project.importSVG(
+        file,
+        () => {
+          console.log('** SVG imported **');
+          resolve(svgScope);
+        },
+        (e) => {
+          console.log('** SVG improt error: ', e);
+          reject(svgScope);
+        }
+      );
+    })
+  }, []);
+
+  useEffect(async () => {
+    const svgScope = await importSvg(Mouth);
+    const skeleton = findFirstItemWithPrefix(svgScope.project, 'skeleton');
+    const mouth = findFirstItemWithPrefix(svgScope.project, 'illustration');
+
+    const mouthSkeletonPoints = findMouth(skeleton);
+    const mouthBones = constructMouthBones(mouthSkeletonPoints);
+    mouthBonesRef.current = mouthBones;
+
+    // TODO: this.faceLen0 = this.getTotalBoneLength(this.faceBones); in skeleton.js
+    //setMouthBones(mouthBones);
+
+    const skinnedPaths = bindSkeletonToIllustration(mouthBones, mouth, svgScope);
+    skinnedPathsRef.current = skinnedPaths;
+    //setSkinnedPaths(skinnedPaths);
+  }, [importSvg]);
   
   return (
     <div className="App">
@@ -81,4 +127,4 @@ function CameraCanvas() {
   );
 }
 
-export default CameraCanvas;
+export default FaceFilter;

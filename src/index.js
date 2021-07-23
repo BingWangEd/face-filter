@@ -1,12 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
-import ImportSvg from './ImportSvg';
 import reportWebVitals from './reportWebVitals';
+import FaceFilter from './FaceFilter';
 
 ReactDOM.render(
   <React.StrictMode>
-    <ImportSvg />
+    <FaceFilter />
   </React.StrictMode>,
   document.getElementById('root')
 );

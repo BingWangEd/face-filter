@@ -1,7 +1,8 @@
 import Mouth from './mouth.svg';
 import Paper from 'paper';
 import { useCallback, useEffect } from 'react';
-import { findFirstItemWithPrefix, bindSkeletonToIllustration } from './utilities';
+import { findFirstItemWithPrefix, bindSkeletonToIllustration, findMouth, constructMouthBones } from './utilities';
+import CameraCanvas from './CameraCanvas';
 
 const ImportSvg = () => {
   const importSvg = useCallback((file) => {
@@ -12,7 +13,7 @@ const ImportSvg = () => {
       svgScope.project.importSVG(
         file,
         () => {
-          // console.log('** SVG imported **');
+          console.log('** SVG imported **');
           resolve(svgScope);
         },
         (e) => {
@@ -27,12 +28,16 @@ const ImportSvg = () => {
     const svgScope = await importSvg(Mouth);
     const skeleton = findFirstItemWithPrefix(svgScope.project, 'skeleton');
     const mouth = findFirstItemWithPrefix(svgScope.project, 'illustration');
-    
-    bindSkeletonToIllustration(skeleton, mouth, svgScope);
+
+    // mouthBones:
+    // { bLeftMouthCornerLeftLowerLipBottom0: [point0, point1]}
+    const mouthSkeletonPoints = findMouth(skeleton);
+    const mouthBones = constructMouthBones(mouthSkeletonPoints);
+    const skinnedPaths = bindSkeletonToIllustration(mouthBones, mouth, svgScope);
   }, [importSvg]);
 
   return (
-    <div>Import Svg</div>
+    <CameraCanvas />
   )
 }
 
