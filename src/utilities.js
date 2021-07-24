@@ -1,28 +1,9 @@
-import Paper from 'paper';
+//import Paper from 'paper';
+import * as Paper from 'paper';
+import { Point } from 'paper/dist/paper-core';
 
 const MIN_FACE_CONFIDENCE_SCORE = 0.8;
-
-// Draw triangle
-
-// Draw the points
-// ctx: canvas
-export const drawMesh = (predictions, ctx) => {
-  if (predictions.length > 0) {
-    predictions.forEach(prediction => {
-      const keypoints = prediction.scaledMesh;
-
-      // Draw dots
-      keypoints.forEach((keypoint) => {
-        const x = keypoint[0];
-        const y = keypoint[1];
-        ctx.beginPath();
-        ctx.arc(x, y, 1, 0, 3 * Math.PI);
-        ctx.fillStyle = "aqua";
-        ctx.fill();
-      });
-    });
-  }
-}
+const MIN_CONFIDENCE_PATH_SCORE = 0.3;
 
 export const findFirstItemWithPrefix = (root, prefix) => {
   // Fetch the descendants (children or children of children) of this item
@@ -276,7 +257,7 @@ const getPointTransform = (p, kp0, kp1) => {
   // console.log('anchorPerc: ', anchorPerc);
   return {
       // p + transform will be the closet spot on the bone
-      transform: new Paper.Point(dirProjD, dirProjN), // paper.default.point
+      transform: new Point(dirProjD, dirProjN), // paper.default.point
       anchorPerc, // what is anchorPerc?
   };
 }
@@ -420,9 +401,15 @@ const updateMouth = (mouthFrame, mouthBones) => {
     const bone = mouthBones[boneName];
 
     // TODO: debug to see why bone might be undefined
-    // if (!bone) return;
+    console.log('boneName: ', boneName);
+    console.log('bone: ', bone);
+    if (!bone) return;
     let part0 = updatedMouthParts[bone.kp0.name];
     let part1 = updatedMouthParts[bone.kp1.name];
+    console.log('part0: ', part0);
+    console.log('part1: ', part1);
+    if (!part0) return;
+    if (!part1) return;
     bone.kp0.currentPosition = part0.position;
     bone.kp1.currentPosition = part1.position;
     bone.score = (part0.score + part1.score) / 2;
@@ -468,7 +455,6 @@ const getCurrentPosition = (segment, currentMouthScale, newMouthBones) => {
   Object.keys(segment.skinning).forEach(boneName => {
     let bt = segment.skinning[boneName];
     const newBone = newMouthBones[boneName];
-    // console.log('transformBone(newBone, bt.transform, currentMouthScale): ', transformBone(newBone, bt.transform, currentMouthScale));
     position = position.add(transformBone(newBone, bt.transform, currentMouthScale).multiply(bt.weight));
   });
   return position;
@@ -476,7 +462,7 @@ const getCurrentPosition = (segment, currentMouthScale, newMouthBones) => {
 
 // Draw the facefilter
 // ctx: canvas
-export const updateMouthSkinnedPath = (facePredictions, ctx, skinnedPaths, mouthBones, mouthLen0) => {
+export const updateMouthSkinnedPath = (facePredictions, skinnedPaths, mouthBones, mouthLen0) => {
   if (!facePredictions || facePredictions.length < 1) return;
   let mouthFrame = toMouthFrame(facePredictions[0]);
 
@@ -492,8 +478,8 @@ export const updateMouthSkinnedPath = (facePredictions, ctx, skinnedPaths, mouth
     }, 0);
   }
 
-  console.log('before >>>>>')
-  console.log(skinnedPaths);
+  // console.log('before >>>>>')
+  // console.log(skinnedPaths);
 
   skinnedPaths.forEach((skinnedPath) => {
     let confidenceScore = 0;
@@ -501,7 +487,6 @@ export const updateMouthSkinnedPath = (facePredictions, ctx, skinnedPaths, mouth
       // Compute confidence score.
       confidenceScore += getConfidenceScore(seg.point); // TODO: This might still be using old values
       // Compute new positions for curve point and handles.
-      console.log('getCurrentPosition(seg.point, currentMouthScale, newMoutSkeleton): ', getCurrentPosition(seg.point, currentMouthScale, newMoutSkeleton));
       seg.point.currentPosition = getCurrentPosition(seg.point, currentMouthScale, newMoutSkeleton);
       if (seg.handleIn) {
         seg.handleIn.currentPosition = getCurrentPosition(seg.handleIn, currentMouthScale, newMoutSkeleton);
@@ -513,11 +498,55 @@ export const updateMouthSkinnedPath = (facePredictions, ctx, skinnedPaths, mouth
     skinnedPath.confidenceScore = confidenceScore / (skinnedPath.segments.length || 1);
   });
 
-  console.log('after >>>>>')
-  console.log(skinnedPaths);
+  // console.log('after >>>>>')
+  // console.log(skinnedPaths);
   return skinnedPaths;
 }
 
 export const drawMouth = (skinnedPaths) => {
+  skinnedPaths.forEach((skinnedPath) => {
+    if (!skinnedPath.confidenceScore || skinnedPath.confidenceScore < MIN_CONFIDENCE_PATH_SCORE) {
+      return;
+    }
 
+    let path = new Paper.Path({
+      fillColor: skinnedPath.fillColor,
+      strokeColor: skinnedPath.strokeColor,
+      strokeWidth: skinnedPath.strokeWidth,
+      closed: skinnedPath.closed,
+    });
+
+    skinnedPath.segments.forEach((seg) => {
+      path.addSegment(
+        seg.point.currentPosition,
+        seg.handleIn ? seg.handleIn.currentPosition.subtract(seg.point.currentPosition) : null,
+        seg.handleOut ? seg.handleOut.currentPosition.subtract(seg.point.currentPosition) : null
+      )
+    });
+    if (skinnedPath.closed) {
+      path.closePath();
+    }
+    console.log('draw ', path);
+    Paper.view.draw();
+  })
+}
+
+// Draw the points
+// ctx: canvas
+export const drawMesh = (predictions, ctx) => {
+  if (predictions.length > 0) {
+    predictions.forEach(prediction => {
+      const keypoints = prediction.scaledMesh;
+
+      // Draw dots
+      keypoints.forEach((keypoint) => {
+        const x = keypoint[0];
+        const y = keypoint[1];
+        ctx.beginPath();
+        ctx.arc(x, y, 1, 0, 3 * Math.PI);
+        ctx.fillStyle = "aqua";
+        ctx.fill();
+      });
+    });
+  }
 }

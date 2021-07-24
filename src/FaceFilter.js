@@ -7,6 +7,8 @@ import Mouth from './mouth.svg';
 import Paper from 'paper';
 import { findFirstItemWithPrefix, bindSkeletonToIllustration, findMouth, constructMouthBones, getTotalBoneLength, updateMouthSkinnedPath, drawMouth } from './utilities';
 
+const MIN_CONFIDENCE_PATH_SCORE = 0.3;
+
 // http://localhost:3002/
 // https://www.youtube.com/watch?v=7lXYGDVHUNw&ab_channel=NicholasRenotte
 
@@ -37,6 +39,9 @@ function FaceFilter() {
       canvasRef.current.width = videoWidth;
       canvasRef.current.height = videoHeight;
 
+      const canvas = canvasRef.current;
+      Paper.setup(canvas);
+
       // Make detections
       const face = await net.estimateFaces({ input: video });
 
@@ -44,7 +49,33 @@ function FaceFilter() {
       const ctx = canvasRef.current.getContext("2d");
       // Sanity check if face exists
       requestAnimationFrame(() => {
-        const updatedSkinnedPath = updateMouthSkinnedPath(face, ctx, skinnedPathsRef.current, mouthBonesRef.current, moustLen0Ref.current);
+        const updatedSkinnedPath = updateMouthSkinnedPath(face, skinnedPathsRef.current, mouthBonesRef.current, moustLen0Ref.current);
+        // drawMouth(updatedSkinnedPath);
+
+        updatedSkinnedPath.forEach((skinnedPath) => {
+          if (!skinnedPath.confidenceScore || skinnedPath.confidenceScore < MIN_CONFIDENCE_PATH_SCORE) {
+            return;
+          }
+      
+          let path = new Paper.Path({
+            fillColor: skinnedPath.fillColor,
+            strokeColor: skinnedPath.strokeColor,
+            strokeWidth: skinnedPath.strokeWidth,
+            closed: skinnedPath.closed,
+          });
+      
+          skinnedPath.segments.forEach((seg) => {
+            path.addSegment(
+              seg.point.currentPosition,
+              seg.handleIn ? seg.handleIn.currentPosition.subtract(seg.point.currentPosition) : null,
+              seg.handleOut ? seg.handleOut.currentPosition.subtract(seg.point.currentPosition) : null
+            )
+          });
+          if (skinnedPath.closed) {
+            path.closePath();
+          }
+          Paper.view.draw();
+        })
       });
     }
   }, []);
@@ -54,10 +85,23 @@ function FaceFilter() {
     const net = await facemesh.load(facemesh.SupportedPackages.mediapipeFacemesh);
     setInterval(() => {
       detect(net);
-    }, 5000);
+    }, 100);
   }, [detect]);
 
   useEffect(() => {
+
+    // const drawLine = (color, direction) => {
+    //   const path = new Paper.Path();
+    //   path.strokeColor = color;
+    //   const start = new Point(100, 100);
+    //   path.moveTo(start);
+    //   path.lineTo(start.add(direction));
+    //   Paper.view.draw();
+    // }
+
+    // drawLine('black', [50, -50]);
+    // drawLine('red', [-50, -50]);
+
     runFacemesh();
   }, [runFacemesh]);
 
