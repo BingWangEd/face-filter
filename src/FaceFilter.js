@@ -3,10 +3,9 @@ import * as tf from "@tensorflow/tfjs";
 import * as facemesh from "@tensorflow-models/face-landmarks-detection";
 import Webcam from 'react-webcam';
 import { useCallback, useEffect, useRef } from 'react';
-import { drawMouth } from './utilities';
 import Mouth from './mouth.svg';
 import Paper from 'paper';
-import { findFirstItemWithPrefix, bindSkeletonToIllustration, findMouth, constructMouthBones } from './utilities';
+import { findFirstItemWithPrefix, bindSkeletonToIllustration, findMouth, constructMouthBones, getTotalBoneLength, updateMouthSkinnedPath, drawMouth } from './utilities';
 
 // http://localhost:3002/
 // https://www.youtube.com/watch?v=7lXYGDVHUNw&ab_channel=NicholasRenotte
@@ -17,6 +16,7 @@ function FaceFilter() {
 
   const mouthBonesRef = useRef();
   const skinnedPathsRef = useRef();
+  const moustLen0Ref = useRef();
 
   // const [mouthBones, setMouthBones] = useState();
   // const [skinnedPaths, setSkinnedPaths] = useState();
@@ -43,7 +43,9 @@ function FaceFilter() {
       // Get canvas context for drawing
       const ctx = canvasRef.current.getContext("2d");
       // Sanity check if face exists
-      requestAnimationFrame(() => drawMouth(face, ctx, skinnedPathsRef.current, mouthBonesRef.current));
+      requestAnimationFrame(() => {
+        const updatedSkinnedPath = updateMouthSkinnedPath(face, ctx, skinnedPathsRef.current, mouthBonesRef.current, moustLen0Ref.current);
+      });
     }
   }, []);
 
@@ -86,6 +88,10 @@ function FaceFilter() {
     const mouthSkeletonPoints = findMouth(skeleton);
     const mouthBones = constructMouthBones(mouthSkeletonPoints);
     mouthBonesRef.current = mouthBones;
+
+    // define mouthLen0
+    const mouthLen0 = getTotalBoneLength(mouthBones);
+    moustLen0Ref.current = mouthLen0;
 
     // TODO: this.faceLen0 = this.getTotalBoneLength(this.faceBones); in skeleton.js
     //setMouthBones(mouthBones);

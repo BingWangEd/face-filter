@@ -69,10 +69,17 @@ const MOUTH_BONES = {
 }
 
 export const findMouth = (root) => {
-  let mouthPoints = {} // { leftUpperLipBottom1: Point {_x: 635.6, _y: 261.6, _owner: Rectangle, _setter: "setCenter"}}
+  let mouthPoints = {}
+  // { leftUpperLipBottom1: {
+  //  position: Point {_x: 635.6, _y: 261.6, _owner: Rectangle, _setter: "setCenter"}
+  //  name: 'leftUpperLipBottom1',
+  // } ...}
   MOUTH_POINTS.forEach((point) => {
     const path = findFirstItemWithPrefix(root, point);
-    mouthPoints[point] = path.bounds.center;
+    mouthPoints[point] = {
+      position: path.bounds.center,
+      name: point,
+    };
   })
   return mouthPoints;
 }
@@ -80,7 +87,6 @@ export const findMouth = (root) => {
 // 
 export const constructMouthBones = (mouthPoints) => {
   let mouthBones = {};
-  // old: { bLeftMouthCornerLeftLowerLipBottom0: [point0, point1]}
   // new: {bLeftMouthCornerLeftLowerLipBottom0: {
   //   name: 'LeftMouthCorner-LeftLowerLipBottom',
   //   kp0: point0,
@@ -176,7 +182,7 @@ const getWeights = (point, bones) => {
   let weights = {};
   Object.keys(bones).forEach(bone => {
       const { kp0, kp1 } = bones[bone];
-      let d = getClosestPointOnSegment(kp0, kp1, point)
+      let d = getClosestPointOnSegment(kp0.position, kp1.position, point)
           .getDistance(point);
       // Absolute weight = 1 / (distance * distance)
       let w = 1 / (d * d);
@@ -230,7 +236,7 @@ const getSkinning = (point, weights, scope) => {
       skinning[boneName] = {
           bone: weights[boneName].bone,
           weight: weights[boneName].value,
-          transform: getPointTransform(point, kp0, kp1),
+          transform: getPointTransform(point, kp0.position, kp1.position),
       };
   });
   return {
@@ -409,21 +415,21 @@ const updateMouth = (mouthFrame, mouthBones) => {
   // Correspods to this.isValid = this.updateFaceParts(face); in skeleton.js
   const updatedMouthParts = updateMouthSkeletonParts(mouthFrame);
 
-  // console.log('mouthBones: ', mouthBones);
-  console.log('updatedMouthParts: ', updatedMouthParts);
   // Update bones (currentPosition)
   Object.keys(mouthBones).forEach((boneName) => {
     const bone = mouthBones[boneName];
-    console.log('bone: ', bone);
-    console.log('bone.kp0.name: ', bone.kp0.name);
-    // let part0 = updatedMouthParts[bone.kp0.name];
-    // let part1 = updatedMouthParts[bone.kp1.name];
-    // bone.kp0.currentPosition = part0.position;
-    // bone.kp1.currentPosition = part1.position;
-    // bone.score = (part0.score + part1.score) / 2;
-    // bone.latestCenter = bone.kp1.currentPosition.add(bone.kp0.currentPosition).divide(2);
+
+    // TODO: debug to see why bone might be undefined
+    // if (!bone) return;
+    let part0 = updatedMouthParts[bone.kp0.name];
+    let part1 = updatedMouthParts[bone.kp1.name];
+    bone.kp0.currentPosition = part0.position;
+    bone.kp1.currentPosition = part1.position;
+    bone.score = (part0.score + part1.score) / 2;
+    bone.latestCenter = bone.kp1.currentPosition.add(bone.kp0.currentPosition).divide(2);
   })
-  console.log('mouthBones now: ', mouthBones);
+
+  return mouthBones;
 }
 
 const getKeypointFromMouthFrame = (mouth, i) => {
@@ -431,9 +437,8 @@ const getKeypointFromMouthFrame = (mouth, i) => {
 }
 
 // bone.transform
-const transformBone = (bone, trans) => {
-  const [kp0, kp1] = bone;
-  console.log('bone: ', bone);
+const transformBone = (bone, trans, currentMouthScale) => {
+  const { kp0, kp1 } = bone;
   if (!kp1.currentPosition || !kp0.currentPosition) {
       return;
   }
@@ -443,34 +448,42 @@ const transformBone = (bone, trans) => {
   let n = dir.clone();
   n.angle += 90;
   let anchor = kp0.currentPosition.multiply(1 - trans.anchorPerc).add(kp1.currentPosition.multiply(trans.anchorPerc));
-  let p = anchor.add(dir.multiply(trans.transform.x)).add(n.multiply(trans.transform.y));
-  // TODO: implement face scale
-  // let p = anchor.add(dir.multiply(trans.transform.x * currentFaceScale)).add(n.multiply(trans.transform.y * currentFaceScale));
+  let p = anchor.add(dir.multiply(trans.transform.x * currentMouthScale)).add(n.multiply(trans.transform.y * currentMouthScale));
   return p;
 }
 
+export const getTotalBoneLength = (bones) => {
+  let totalLen = 0;
+  Object.keys(bones).forEach((boneName) => {
+    const bone = bones[boneName];
+    let d = (bone.kp0.currentPosition || bone.kp0.position).subtract(bone.kp1.currentPosition || bone.kp1.position);
+    totalLen += d.length;
+  });
+  return totalLen;
+}
+
 // Finds a point's current position from the current bone position.
-const getCurrentPosition = (segment) => {
+const getCurrentPosition = (segment, currentMouthScale, newMouthBones) => {
   let position = new Paper.Point();
   Object.keys(segment.skinning).forEach(boneName => {
-      let bt = segment.skinning[boneName];
-      // here implement transform
-      // error: bt.bone.transform is not a function
-      // position = position.add(transformBone(bt.bone, bt.transform).multiply(bt.weight));
+    let bt = segment.skinning[boneName];
+    const newBone = newMouthBones[boneName];
+    // console.log('transformBone(newBone, bt.transform, currentMouthScale): ', transformBone(newBone, bt.transform, currentMouthScale));
+    position = position.add(transformBone(newBone, bt.transform, currentMouthScale).multiply(bt.weight));
   });
   return position;
 }
 
 // Draw the facefilter
 // ctx: canvas
-export const drawMouth = (facePredictions, ctx, skinnedPaths, mouthBones) => {
+export const updateMouthSkinnedPath = (facePredictions, ctx, skinnedPaths, mouthBones, mouthLen0) => {
   if (!facePredictions || facePredictions.length < 1) return;
   let mouthFrame = toMouthFrame(facePredictions[0]);
 
   // Corresponds to updateFaceParts
   const newMoutSkeleton = updateMouth(mouthFrame, mouthBones);
-  
-  console.log('newMoutSkeleton: ', newMoutSkeleton);
+  // Get currentMouthScale
+  const currentMouthScale = getTotalBoneLength(mouthBones) / mouthLen0; // TODO: mouthBones here may need to be replaced by new values
 
   let getConfidenceScore = (p) => {
     return Object.keys(p.skinning).reduce((totalScore, boneName) => {
@@ -479,40 +492,32 @@ export const drawMouth = (facePredictions, ctx, skinnedPaths, mouthBones) => {
     }, 0);
   }
 
-  // skinnedPaths.forEach((skinnedPath) => {
-  //   console.log('before >>>>>')
-  //   console.log(skinnedPath)
-  //   let confidenceScore = 0;
-  //   skinnedPath.segments.forEach(seg => {
-  //     // Compute confidence score.
-  //     confidenceScore += getConfidenceScore(seg.point);
-  //     // Compute new positions for curve point and handles.
-  //     seg.point.currentPosition = getCurrentPosition(seg.point);
-  //     if (seg.handleIn) {
-  //       seg.handleIn.currentPosition = getCurrentPosition(seg.handleIn);
-  //     }
-  //     if (seg.handleOut) {
-  //       seg.handleOut.currentPosition = getCurrentPosition(seg.handleOut);
-  //     }
-  //   });
-  //   console.log('after >>>>>')
-  //   console.log(skinnedPath)
-  //   return skinnedPath;
-  // });
+  console.log('before >>>>>')
+  console.log(skinnedPaths);
 
-  // if (predictions.length > 0) {
-  //   predictions.forEach(prediction => {
-  //     const keypoints = prediction.scaledMesh;
+  skinnedPaths.forEach((skinnedPath) => {
+    let confidenceScore = 0;
+    skinnedPath.segments.forEach((seg) => {
+      // Compute confidence score.
+      confidenceScore += getConfidenceScore(seg.point); // TODO: This might still be using old values
+      // Compute new positions for curve point and handles.
+      console.log('getCurrentPosition(seg.point, currentMouthScale, newMoutSkeleton): ', getCurrentPosition(seg.point, currentMouthScale, newMoutSkeleton));
+      seg.point.currentPosition = getCurrentPosition(seg.point, currentMouthScale, newMoutSkeleton);
+      if (seg.handleIn) {
+        seg.handleIn.currentPosition = getCurrentPosition(seg.handleIn, currentMouthScale, newMoutSkeleton);
+      }
+      if (seg.handleOut) {
+        seg.handleOut.currentPosition = getCurrentPosition(seg.handleOut, currentMouthScale, newMoutSkeleton);
+      }
+    });
+    skinnedPath.confidenceScore = confidenceScore / (skinnedPath.segments.length || 1);
+  });
 
-  //     // Draw dots
-  //     keypoints.forEach((keypoint) => {
-  //       const x = keypoint[0];
-  //       const y = keypoint[1];
-  //       ctx.beginPath();
-  //       ctx.arc(x, y, 1, 0, 3 * Math.PI);
-  //       ctx.fillStyle = "aqua";
-  //       ctx.fill();
-  //     });
-  //   });
-  // }
+  console.log('after >>>>>')
+  console.log(skinnedPaths);
+  return skinnedPaths;
+}
+
+export const drawMouth = (skinnedPaths) => {
+
 }
